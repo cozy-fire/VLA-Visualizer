@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ app_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">Attention Analysis</div>
+      <h1>{{ app_name }}</h1>
+    </div>
+    <div id="statusBadge" class="status-badge idle">未采集</div>
+  </header>
+
+  <main class="shell">
+    <aside class="panel controls">
+      <section class="block">
+        <h2>数据采集</h2>
+        <label>Checkpoint</label>
+        <input id="checkpoint" type="text" list="checkpointHistory" autocomplete="off">
+        <datalist id="checkpointHistory"></datalist>
+        <label>数据集</label>
+        <input id="dataset" type="text" list="datasetHistory" autocomplete="off">
+        <datalist id="datasetHistory"></datalist>
+        <label>当前数据帧</label>
+        <div class="frame-select-row">
+          <div id="selectedFrameText" class="frame-index">Frame 0</div>
+          <button id="openFramePickerBtn" type="button">选择数据帧</button>
+        </div>
+        <button id="captureBtn" class="primary">运行并采集 Cache</button>
+      </section>
+
+      <section class="block">
+        <h2>筛选</h2>
+        <div class="grid2">
+          <label>Step<select id="stepSelect" disabled><option value="all">全部</option></select></label>
+          <label>Layer<select id="layerSelect" disabled><option value="all">全部</option></select></label>
+          <label>Head<select id="headSelect" disabled><option value="all">全部</option></select></label>
+          <label>模式<select id="modeSelect" disabled><option value="static">静态</option><option value="steps">steps</option><option value="layers">layers</option><option value="heads">heads</option></select></label>
+        </div>
+        <label class="toggle"><input id="overlayToggle" type="checkbox" disabled><span>显示原图叠加</span></label>
+      </section>
+
+      <section class="block">
+        <h2>播放</h2>
+        <div class="button-row">
+          <button id="prevBtn" disabled>上一帧</button>
+          <button id="playBtn" disabled>播放</button>
+          <button id="nextBtn" disabled>下一帧</button>
+        </div>
+        <div class="grid2">
+          <label>间隔(ms)<input id="intervalInput" type="number" min="100" step="100" value="600"></label>
+          <label class="toggle inline"><input id="loopToggle" type="checkbox" checked><span>循环</span></label>
+        </div>
+      </section>
+    </aside>
+
+    <section class="workspace">
+      <div class="summary-card">
+        <div class="summary-copy">
+          <div id="summaryText">请选择 checkpoint、数据集和数据帧后采集 cache。</div>
+          <div id="positionText" class="muted">尚未加载 attention map</div>
+        </div>
+        <div id="attentionLegend" class="attention-legend" hidden aria-label="Attention heat color scale">
+          <div class="legend-title">Attention</div>
+          <div class="legend-row">
+            <span>Low</span>
+            <div class="legend-gradient" aria-hidden="true"></div>
+            <span>High</span>
+          </div>
+        </div>
+      </div>
+      <div id="mapGrid" class="map-grid empty">
+        <div class="empty-state">采集 cache 后可浏览 attention map</div>
+      </div>
+      <div class="pager">
+        <button id="pagePrev" disabled>上一页</button>
+        <span id="pageInfo">0 / 0</span>
+        <button id="pageNext" disabled>下一页</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="frameModal" class="modal" hidden>
+    <div class="modal-backdrop" data-close-frame-modal></div>
+    <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="frameModalTitle">
+      <header class="modal-header">
+        <div>
+          <h2 id="frameModalTitle">选择数据帧</h2>
+          <div id="frameModalStatus" class="muted">加载数据帧预览</div>
+        </div>
+        <button id="closeFrameModalBtn" type="button">关闭</button>
+      </header>
+      <div id="frameList" class="frame-list"></div>
+      <footer class="modal-footer">
+        <button id="framePagePrev" type="button">上一页</button>
+        <span id="framePageInfo">0 / 0</span>
+        <button id="framePageNext" type="button">下一页</button>
+        <button id="confirmFrameBtn" type="button" class="primary small">确认选择</button>
+      </footer>
+    </section>
+  </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

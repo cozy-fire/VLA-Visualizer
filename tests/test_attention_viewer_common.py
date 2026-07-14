@@ -15,6 +15,8 @@ from custom_visualizer.common import (
     load_settings,
     patch_scores_to_grid,
     save_settings,
+    serialize_display_item,
+    summarize_frame_state,
     static_window,
 )
 
@@ -41,15 +43,25 @@ class AttentionViewerCommonTests(unittest.TestCase):
         path.unlink(missing_ok=True)
         temporary.unlink(missing_ok=True)
         try:
-            self.assertEqual(load_settings("checkpoint-default", "dataset-default", path), {
-                "checkpoint": "checkpoint-default",
-                "dataset": "dataset-default",
-            })
+            defaults = load_settings("checkpoint-default", "dataset-default", path)
+            self.assertEqual(defaults["checkpoint"], "checkpoint-default")
+            self.assertEqual(defaults["dataset"], "dataset-default")
+            self.assertEqual(defaults["checkpoint_history"], ["checkpoint-default"])
+            self.assertEqual(defaults["dataset_history"], ["dataset-default"])
+
             save_settings("checkpoint-a", "dataset-a", path)
-            self.assertEqual(load_settings("checkpoint-default", "dataset-default", path), {
-                "checkpoint": "checkpoint-a",
-                "dataset": "dataset-a",
-            })
+            first = load_settings("checkpoint-default", "dataset-default", path)
+            self.assertEqual(first["checkpoint"], "checkpoint-a")
+            self.assertEqual(first["dataset"], "dataset-a")
+            self.assertEqual(first["checkpoint_history"], ["checkpoint-a", "checkpoint-default"])
+            self.assertEqual(first["dataset_history"], ["dataset-a", "dataset-default"])
+
+            save_settings("checkpoint-b", "dataset-b", path)
+            second = load_settings("checkpoint-default", "dataset-default", path)
+            self.assertEqual(second["checkpoint"], "checkpoint-b")
+            self.assertEqual(second["dataset"], "dataset-b")
+            self.assertEqual(second["checkpoint_history"][:3], ["checkpoint-b", "checkpoint-a", "checkpoint-default"])
+            self.assertEqual(second["dataset_history"][:3], ["dataset-b", "dataset-a", "dataset-default"])
             path.write_text("not json", encoding="utf-8")
             self.assertEqual(
                 load_settings("checkpoint-default", "dataset-default", path)["checkpoint"],
@@ -58,6 +70,31 @@ class AttentionViewerCommonTests(unittest.TestCase):
         finally:
             path.unlink(missing_ok=True)
             temporary.unlink(missing_ok=True)
+
+
+    def test_serialize_display_item_preserves_float32_payload(self):
+        cache = fake_cache()
+        cache[0]["probs"][0, 2] = np.arange(cache[0]["probs"].shape[-2] * cache[0]["probs"].shape[-1], dtype=np.float32).reshape(cache[0]["probs"].shape[-2], cache[0]["probs"].shape[-1])
+        item = filter_display_items(cache, step=0, layer=0, head=2)[0]
+        payload = serialize_display_item(item)
+        self.assertEqual(payload["probs"]["dtype"], "float32")
+        self.assertEqual(payload["probs"]["shape"], list(cache[0]["probs"].shape[-2:]))
+        raw = __import__("base64").b64decode(payload["probs"]["data"])
+        restored = np.frombuffer(raw, dtype=np.float32).reshape(payload["probs"]["shape"])
+        np.testing.assert_allclose(restored, cache[0]["probs"][0, 2])
+
+    def test_summarize_frame_state_handles_arrays_and_scalars(self):
+        summaries = summarize_frame_state({
+            "observation.state": np.array([1.234567, 2.0], dtype=np.float32),
+            "next.done": True,
+            "robot_state_extra": 3,
+        })
+        keys = {item["key"] for item in summaries}
+        self.assertIn("observation.state", keys)
+        self.assertIn("robot_state_extra", keys)
+        state = next(item for item in summaries if item["key"] == "observation.state")
+        self.assertEqual(state["shape"], [2])
+        self.assertEqual(state["preview"][0], 1.23457)
 
     def test_static_window_only_returns_visible_maps(self):
         items = filter_display_items(fake_cache()) * 134
@@ -98,6 +135,25 @@ class AttentionViewerCommonTests(unittest.TestCase):
             build_dynamic_frames(cache, "steps")
         with self.assertRaises(ValueError):
             build_dynamic_frames(cache, "steps", layer=0, head=0)
+
+
+    def test_frame_page_stride_samples_every_n_frames(self):
+        from custom_visualizer.common.lerobot_data import load_lerobot_frame_page
+
+        class FakeDataset:
+            num_frames = 40
+            def __getitem__(self, index):
+                return {
+                    "observation.images.front": np.zeros((8, 8, 3), dtype=np.float32),
+                    "observation.state": np.array([index], dtype=np.float32),
+                }
+
+        import unittest.mock
+        with unittest.mock.patch("lerobot.datasets.lerobot_dataset.LeRobotDataset", return_value=FakeDataset()):
+            page = load_lerobot_frame_page("fake-dataset", page=0, page_size=3, stride=16)
+        self.assertEqual([frame["frame_idx"] for frame in page["frames"]], [0, 16, 32])
+        self.assertEqual(page["sampled_frames"], 3)
+        self.assertEqual(page["stride"], 16)
 
     def test_collect_image_observations_uses_observation_images_prefix(self):
         item = {

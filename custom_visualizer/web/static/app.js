@@ -420,6 +420,10 @@ function stopPlayback() {
 
 function startPlayback() {
   if (!state.captured || state.frameCount <= 0) return;
+  if (state.frameIndex + 1 >= state.frameCount) {
+    state.frameIndex = 0;
+    renderDynamicFrame();
+  }
   state.playing = true;
   const playToken = ++state.playToken;
   el('playBtn').textContent = '暂停';
@@ -465,6 +469,41 @@ async function onModeOrFilterChange() {
 }
 
 
+function updateFramePageControls(page, totalPages) {
+  const button = el('framePageJumpBtn');
+  const select = el('framePageSelect');
+  button.textContent = `${page + 1} / ${totalPages}`;
+  button.disabled = totalPages <= 1;
+
+  const currentValue = String(page);
+  if (select.dataset.totalPages !== String(totalPages)) {
+    select.innerHTML = '';
+    for (let idx = 0; idx < totalPages; idx += 1) {
+      const option = document.createElement('option');
+      option.value = String(idx);
+      option.textContent = `第 ${idx + 1} 页 / 共 ${totalPages} 页`;
+      select.appendChild(option);
+    }
+    select.dataset.totalPages = String(totalPages);
+  }
+  select.value = currentValue;
+  select.hidden = true;
+  button.hidden = false;
+}
+
+function showFramePageSelect() {
+  const button = el('framePageJumpBtn');
+  const select = el('framePageSelect');
+  if (button.disabled) return;
+  button.hidden = true;
+  select.hidden = false;
+  select.focus();
+}
+
+function hideFramePageSelect() {
+  el('framePageSelect').hidden = true;
+  el('framePageJumpBtn').hidden = false;
+}
 function renderFrameList(frames) {
   const list = el('frameList');
   list.innerHTML = '';
@@ -502,7 +541,7 @@ async function loadFramePreviewPage(page = 0) {
   state.framePickerPage = data.page;
   state.framePickerTotalPages = data.total_pages;
   renderFrameList(data.frames || []);
-  el('framePageInfo').textContent = `${data.page + 1} / ${data.total_pages}`;
+  updateFramePageControls(data.page, data.total_pages);
   el('framePagePrev').disabled = data.page <= 0;
   el('framePageNext').disabled = data.page + 1 >= data.total_pages;
   el('frameModalStatus').textContent = `共 ${data.num_frames} 帧`;
@@ -524,6 +563,53 @@ function closeFrameModal() {
   el('frameModal').hidden = true;
 }
 
+async function runCapture() {
+  stopPlayback();
+  setStatus('采集中', 'busy');
+  el('captureBtn').disabled = true;
+  el('confirmFrameBtn').disabled = true;
+  el('summaryText').textContent = '正在加载模型、数据集并采集 cache...';
+  try {
+    const data = await api('/api/capture', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        checkpoint: el('checkpoint').value,
+        dataset: el('dataset').value,
+        frame_idx: state.selectedFrameIdx,
+      }),
+    });
+    state.captured = true;
+    state.layout = data.layout;
+    state.sourceImages = data.source_images || [];
+    state.imageKeys = data.image_keys || [];
+    applyPathHistory({
+      checkpoint: data.checkpoint || el('checkpoint').value,
+      dataset: data.dataset || el('dataset').value,
+      checkpoint_history: data.checkpoint_history || [el('checkpoint').value],
+      dataset_history: data.dataset_history || [el('dataset').value],
+    });
+    fillSelect(el('stepSelect'), data.steps);
+    fillSelect(el('layerSelect'), data.layers);
+    fillSelect(el('headSelect'), data.heads);
+    el('modeSelect').disabled = false;
+    el('overlayToggle').disabled = !data.overlay_available;
+    el('overlayToggle').checked = false;
+    updateAttentionLegend();
+    el('summaryText').textContent = `采集完成：${data.summary}${data.overlay_reason ? '；叠加不可用：' + data.overlay_reason : ''}`;
+    setStatus('已采集', 'ok');
+    await loadStatic(true);
+  } catch (err) {
+    state.captured = false;
+    updateAttentionLegend();
+    setStatus('采集失败', 'error');
+    el('summaryText').textContent = err.message;
+    renderCards([]);
+  } finally {
+    el('captureBtn').disabled = false;
+    el('confirmFrameBtn').disabled = false;
+  }
+}
 async function init() {
   updateSelectedFrameText();
   updateAttentionLegend();
@@ -533,53 +619,8 @@ async function init() {
   } catch (err) {
     setStatus('设置加载失败', 'error');
     el('summaryText').textContent = err.message;
-  }
-
-  el('captureBtn').addEventListener('click', async () => {
-    stopPlayback();
-    setStatus('采集中', 'busy');
-    el('captureBtn').disabled = true;
-    el('summaryText').textContent = '正在加载模型、数据集并采集 cache...';
-    try {
-      const data = await api('/api/capture', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          checkpoint: el('checkpoint').value,
-          dataset: el('dataset').value,
-          frame_idx: state.selectedFrameIdx,
-        }),
-      });
-      state.captured = true;
-      state.layout = data.layout;
-      state.sourceImages = data.source_images || [];
-      state.imageKeys = data.image_keys || [];
-      applyPathHistory({
-        checkpoint: data.checkpoint || el('checkpoint').value,
-        dataset: data.dataset || el('dataset').value,
-        checkpoint_history: data.checkpoint_history || [el('checkpoint').value],
-        dataset_history: data.dataset_history || [el('dataset').value],
-      });
-      fillSelect(el('stepSelect'), data.steps);
-      fillSelect(el('layerSelect'), data.layers);
-      fillSelect(el('headSelect'), data.heads);
-      el('modeSelect').disabled = false;
-      el('overlayToggle').disabled = !data.overlay_available;
-      el('overlayToggle').checked = false;
-      updateAttentionLegend();
-      el('summaryText').textContent = `采集完成：${data.summary}${data.overlay_reason ? '；叠加不可用：' + data.overlay_reason : ''}`;
-      setStatus('已采集', 'ok');
-      await loadStatic(true);
-    } catch (err) {
-      state.captured = false;
-      updateAttentionLegend();
-      setStatus('采集失败', 'error');
-      el('summaryText').textContent = err.message;
-      renderCards([]);
-    } finally {
-      el('captureBtn').disabled = false;
-    }
-  });
+  }
+  el('captureBtn').addEventListener('click', () => { runCapture(); });
 
   ['stepSelect', 'layerSelect', 'headSelect', 'modeSelect', 'overlayToggle'].forEach((id) => {
     el(id).addEventListener('change', () => onModeOrFilterChange().catch((err) => {
@@ -599,10 +640,18 @@ async function init() {
   document.querySelector('[data-close-frame-modal]').addEventListener('click', closeFrameModal);
   el('framePagePrev').addEventListener('click', () => loadFramePreviewPage(state.framePickerPage - 1).catch((err) => { el('frameModalStatus').textContent = err.message; }));
   el('framePageNext').addEventListener('click', () => loadFramePreviewPage(state.framePickerPage + 1).catch((err) => { el('frameModalStatus').textContent = err.message; }));
+  el('framePageJumpBtn').addEventListener('click', showFramePageSelect);
+  el('framePageSelect').addEventListener('change', () => {
+    const page = Number(el('framePageSelect').value || 0);
+    hideFramePageSelect();
+    loadFramePreviewPage(page).catch((err) => { el('frameModalStatus').textContent = err.message; });
+  });
+  el('framePageSelect').addEventListener('blur', hideFramePageSelect);
   el('confirmFrameBtn').addEventListener('click', () => {
     state.selectedFrameIdx = state.pendingFrameIdx;
     updateSelectedFrameText();
     closeFrameModal();
+    runCapture();
   });
 }
 

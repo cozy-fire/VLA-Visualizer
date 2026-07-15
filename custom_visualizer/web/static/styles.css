@@ -199,6 +199,20 @@ button.primary:hover:not(:disabled) { background: var(--accent-dark); }
   border-bottom: 1px solid var(--line);
 }
 .modal-footer { border-bottom: 0; border-top: 1px solid var(--line); justify-content: flex-end; }
+.frame-page-jump {
+  min-width: 92px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.page-jump-btn {
+  min-width: 92px;
+  padding: 0 10px;
+}
+.page-jump-select {
+  width: 112px;
+  height: 36px;
+}
 .frame-list {
   overflow: auto;
   padding: 14px;

@@ -1,0 +1,19 @@
+name: vla-visualizer
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - numpy
+  - pillow
+  - matplotlib
+  - flask
+  - certifi
+  - pytorch
+  - torchvision
+  - pip:
+      - bytecode
+      - lerobot
+      - -e .

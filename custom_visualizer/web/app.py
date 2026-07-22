@@ -37,6 +37,14 @@ def create_app(adapter: Any, persist_settings: bool = True) -> Flask:
     state = ViewerState(adapter=adapter)
     app.config["VIEWER_STATE"] = state
 
+    def load_adapter_settings():
+        kwargs = {"path": adapter.settings_path} if getattr(adapter, "settings_path", None) else {}
+        return load_settings(adapter.default_checkpoint, adapter.default_dataset, **kwargs)
+
+    def save_adapter_settings(checkpoint: str, dataset: str) -> None:
+        kwargs = {"path": adapter.settings_path} if getattr(adapter, "settings_path", None) else {}
+        save_settings(checkpoint, dataset, **kwargs)
+
     @app.get("/")
     def index():
         return render_template("index.html", app_name=f"{adapter.name} Attention Viewer")
@@ -44,7 +52,7 @@ def create_app(adapter: Any, persist_settings: bool = True) -> Flask:
     @app.get("/api/settings")
     def api_settings():
         if persist_settings:
-            settings = load_settings(adapter.default_checkpoint, adapter.default_dataset)
+            settings = load_adapter_settings()
         else:
             settings = {
                 "checkpoint": adapter.default_checkpoint,
@@ -93,7 +101,7 @@ def create_app(adapter: Any, persist_settings: bool = True) -> Flask:
         with state.lock:
             try:
                 if persist_settings:
-                    save_settings(checkpoint, dataset)
+                    save_adapter_settings(checkpoint, dataset)
                 if state.context and not adapter.can_reuse_context(state.context, checkpoint):
                     return jsonify({"ok": False, "error": adapter.restart_required_message}), 400
                 if state.context is None:
@@ -102,7 +110,7 @@ def create_app(adapter: Any, persist_settings: bool = True) -> Flask:
                 response = {"ok": True, "frame_idx": frame_idx, **_capture_summary(state.result)}
                 response.update(serialize_capture_context(state.result))
                 if persist_settings:
-                    settings = load_settings(adapter.default_checkpoint, adapter.default_dataset)
+                    settings = load_adapter_settings()
                     response.update({
                         "checkpoint": settings["checkpoint"],
                         "dataset": settings["dataset"],

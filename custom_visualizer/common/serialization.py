@@ -21,12 +21,16 @@ def ndarray_to_float32_payload(array: Any) -> dict[str, Any]:
 
 def serialize_display_item(item: DisplayItem) -> dict[str, Any]:
     entry = item.entry
+    label = str(entry.get("label", entry["type"]))
     return {
         "step": int(entry["step"]),
         "layer": int(entry["layer_idx"]),
         "head": int(item.head_idx),
         "type": str(entry["type"]),
-        "title": f"S{entry['step']} · L{entry['layer_idx']} · H{item.head_idx} · {entry['type']}",
+        "label": label,
+        "attention_kind": str(entry.get("attention_kind", entry["type"])),
+        "mask_type": entry.get("mask_type"),
+        "title": f"S{entry['step']} · L{entry['layer_idx']} · H{item.head_idx} · {label}",
         "probs": ndarray_to_float32_payload(np.asarray(entry["probs"])[0, item.head_idx]),
     }
 

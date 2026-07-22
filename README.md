@@ -4,19 +4,20 @@
 
 VLA-Visualizer 是一个用于 Vision-Language-Action 模型的本地 attention 可视化工具。项目将模型相关的 attention 采集逻辑与通用 Web 可视化逻辑拆开，便于后续接入不同 VLA 模型。
 
-当前版本**只适配了 SmolVLA**。后续支持其他模型时，可以新增对应的 policy adapter，并复用现有的 Web Viewer。
+当前版本适配了 **SmolVLA** 和 **SmolVLA-APT Stage 1**。不同模型通过独立 policy adapter 采集 attention，并复用同一套 Web Viewer。
 
 ![SmolVLA attention viewer demo](assets/smolvla_attention_viewer.gif)
 
 ## 功能概览
 
-- 选择 SmolVLA checkpoint 和 LeRobot 数据集路径。
+- 选择 SmolVLA 或 SmolVLA-APT checkpoint，以及 LeRobot 数据集路径。
 - 预览并选择要分析的数据帧。
 - 采集该数据帧的 Phase 2 denoising attention cache。
 - 按 `step`、`layer`、`head_idx` 筛选和浏览 attention map。
 - 支持静态分页浏览和 `steps` / `layers` / `heads` 三种动态播放模式。
 - 支持矩阵热力图和原图叠加两种展示方式。
 - 支持 `observation.images.*` 多视角图像观测。
+- SmolVLA-APT 仅支持 Stage 1，并将偶数层标记为 `VLA似然`、奇数层标记为 `VA先验`。
 
 ## 代码结构
 
@@ -24,7 +25,8 @@ VLA-Visualizer 是一个用于 Vision-Language-Action 模型的本地 attention 
 custom_visualizer/
   common/              # 数据集读取、图像收集、attention 筛选、布局推导、序列化
   web/                 # Flask app、API routes、HTML/CSS/JS 前端
-  policies/smolvla/    # SmolVLA 模型加载、get_local 插桩、cache 标注
+  policies/smolvla/      # SmolVLA 模型加载、get_local 插桩、cache 标注
+  policies/smolvla_apt/  # SmolVLA-APT Stage 1、SDPA 概率重算、cache 标注
 visualizer/            # 上游 Visualizer 的 get_local 字节码插桩工具
 ```
 
@@ -39,11 +41,21 @@ conda activate vla-visualizer
 
 如果你需要特定 CUDA 版本的 PyTorch，请根据本机 CUDA/驱动情况参考 PyTorch 官方安装命令调整 `environment.yml` 中的 `pytorch` 相关依赖。
 
-### 2. 启动 SmolVLA Viewer
+### 2. 启动 Viewer
+
+SmolVLA：
 
 ```bash
 python -m custom_visualizer.policies.smolvla.viewer
 ```
+
+SmolVLA-APT Stage 1：
+
+```bash
+python -m custom_visualizer.policies.smolvla_apt.viewer
+```
+
+SmolVLA-APT Viewer 要求当前环境中的 LeRobot 包含 `lerobot.policies.smolvla_apt` 实现；Stage 0 checkpoint 会被明确拒绝。
 
 服务默认监听：
 
@@ -55,7 +67,7 @@ python -m custom_visualizer.policies.smolvla.viewer
 
 ### 3. 在页面中采集并浏览
 
-1. 输入或选择 SmolVLA checkpoint。
+1. 输入或选择与当前 Viewer 对应的 checkpoint。
 2. 输入或选择 LeRobot 数据集路径 / Hub repo。
 3. 选择数据帧。
 4. 点击 **确认并运行采集**。
@@ -85,6 +97,22 @@ SmolVLMWithExpertModel.eager_attention_forward
 ```
 
 其中 query 轴对应 action tokens；key 轴包含 image / language / state 等 prefix tokens，`self_attn` 还包含 action tokens。
+
+## SmolVLA-APT Stage 1 attention 说明
+
+SmolVLA-APT Viewer 只采集 denoising 中的 `HybridAttentionLayers`，不展示 VLM backbone attention 和 Gate Fusion。由于 PyTorch SDPA 不直接返回 attention probability，adapter 根据 Q、K、RoPE 和当前层 mask 重算 Action-query attention：
+
+```text
+(B, H, action_tokens, image + language + state + action)
+```
+
+Stage 1 偶数层使用 full mask，显示为 `VLA似然`；奇数层使用 dilated mask，显示为 `VA先验`。底层均为 self-attention。
+
+默认 Stage 1 配置包含 10 个 denoising step 和 8 个 Hybrid Attention layer，因此一次采集通常生成 80 条 attention entry。当前 checkpoint 实测单条 shape 为：
+
+```text
+(1, 15, 50, 133)  # 64 image + 18 language + 1 state + 50 action
+```
 
 ## 扩展新模型
 

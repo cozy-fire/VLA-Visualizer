@@ -12,7 +12,7 @@ from custom_visualizer.common import DisplayItem, TokenLayout, compose_overlay_i
 
 def render_item_png(item: DisplayItem, layout: TokenLayout, source_images: list[np.ndarray], overlay: bool) -> str:
     entry, head = item.entry, item.head_idx
-    title = f"S{entry['step']} · L{entry['layer_idx']} · H{head}\n{entry['type']}"
+    title = f"S{entry['step']} · L{entry['layer_idx']} · H{head}\n{entry.get('label', entry['type'])}"
     figure = Figure(figsize=(3.6, 3.0), dpi=130)
     axis = figure.subplots()
     if overlay and not layout.overlay_reason:
@@ -38,5 +38,5 @@ def _draw_partitions(axis: Any, entry: dict[str, Any], layout: TokenLayout) -> N
     language_end = image_end + layout.language_tokens
     axis.axvline(image_end - 0.5, color="white", linewidth=1.2, linestyle="--")
     axis.axvline(language_end - 0.5, color="white", linewidth=1.2, linestyle="--")
-    if entry["type"] == "self_attn":
+    if entry.get("attention_kind", entry["type"]) == "self_attn":
         axis.axvline(layout.prefix_tokens - 0.5, color="red", linewidth=1.6)

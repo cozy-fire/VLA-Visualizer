@@ -198,7 +198,9 @@ function drawPartitions(ctx, item, margin, plotW, plotH) {
   };
   drawLine(layout.image_tokens, '#ffffff', 1.4, [5, 4]);
   drawLine(layout.image_tokens + layout.language_tokens, '#ffffff', 1.4, [5, 4]);
-  if (item.type === 'self_attn') drawLine(layout.prefix_tokens, '#ef4444', 2.0);
+  if ((item.attention_kind || item.type) === 'self_attn') {
+    drawLine(layout.prefix_tokens, '#ef4444', 2.0);
+  }
 }
 
 function meanImageAttention(item) {

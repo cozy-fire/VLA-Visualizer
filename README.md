@@ -100,6 +100,9 @@ SmolVLMWithExpertModel.eager_attention_forward
 
 ## SmolVLA-APT Stage 1 attention 说明
 
+- APT 原论文：[APT: Action Expert Pretraining Improves Instruction Generalization of Vision-Language-Action Policies](https://arxiv.org/abs/2606.12366)
+- SmolVLA-APT 实现：[cozy-fire/lerobot](https://github.com/cozy-fire/lerobot) 的 [`smolvla-apt` 分支](https://github.com/cozy-fire/lerobot/tree/smolvla-apt)
+
 SmolVLA-APT Viewer 只采集 denoising 中的 `HybridAttentionLayers`，不展示 VLM backbone attention 和 Gate Fusion。由于 PyTorch SDPA 不直接返回 attention probability，adapter 根据 Q、K、RoPE 和当前层 mask 重算 Action-query attention：
 
 ```text
